@@ -1,0 +1,4 @@
+to start
+npx create-react-app poiseuille-app
+cd poiseuille-app
+npm start

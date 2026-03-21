@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/poiseuille-flow-demo/static/css/main.c50ef72f.css",
-    "main.js": "/poiseuille-flow-demo/static/js/main.a4a38a1c.js",
+    "main.js": "/poiseuille-flow-demo/static/js/main.8ceb9101.js",
     "static/js/453.bb88963c.chunk.js": "/poiseuille-flow-demo/static/js/453.bb88963c.chunk.js",
     "static/media/KaTeX_AMS-Regular.ttf": "/poiseuille-flow-demo/static/media/KaTeX_AMS-Regular.853be92419a6c3766b9a.ttf",
     "static/media/KaTeX_Main-Regular.ttf": "/poiseuille-flow-demo/static/media/KaTeX_Main-Regular.9eba1d77abcf2aa6e94e.ttf",
@@ -65,11 +65,11 @@
     "static/media/KaTeX_Size3-Regular.woff2": "/poiseuille-flow-demo/static/media/KaTeX_Size3-Regular.e1951519f6f0596f7356.woff2",
     "index.html": "/poiseuille-flow-demo/index.html",
     "main.c50ef72f.css.map": "/poiseuille-flow-demo/static/css/main.c50ef72f.css.map",
-    "main.a4a38a1c.js.map": "/poiseuille-flow-demo/static/js/main.a4a38a1c.js.map",
+    "main.8ceb9101.js.map": "/poiseuille-flow-demo/static/js/main.8ceb9101.js.map",
     "453.bb88963c.chunk.js.map": "/poiseuille-flow-demo/static/js/453.bb88963c.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.c50ef72f.css",
-    "static/js/main.a4a38a1c.js"
+    "static/js/main.8ceb9101.js"
   ]
 }

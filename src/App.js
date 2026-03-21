@@ -122,7 +122,7 @@ function App() {
         {/* Radius Chart */}
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="text-center font-bold text-gray-700 mb-2"> Flow Q vs Radius (Exponential)</h3>
-          <ResponsiveContainer width="30%" height={250}>
+          <ResponsiveContainer width="100%" height={250}>
             <LineChart data={radiusData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="x" label={{ value: 'Radius', position: 'insideBottom', offset: -10 }} />
@@ -136,7 +136,7 @@ function App() {
         {/* Viscosity Chart */}
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="text-center font-bold text-gray-700 mb-2"> Flow Q vs Viscosity (Inverse)</h3>
-          <ResponsiveContainer width="30%" height={250}>
+          <ResponsiveContainer width="100%" height={250}>
             <LineChart data={viscosityData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="x" label={{ value: 'Viscosity', position: 'insideBottom', offset: -10 }} />
@@ -150,7 +150,7 @@ function App() {
         {/* Length Chart */}
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="text-center font-bold text-gray-700 mb-2"> Flow Q vs Length (Inverse)</h3>
-          <ResponsiveContainer width="30%" height={250}>
+          <ResponsiveContainer width="100%" height={250}>
             <LineChart data={lengthData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="x" label={{ value: 'Length', position: 'insideBottom', offset: -10 }} />
@@ -164,7 +164,7 @@ function App() {
         {/* Pressure Chart */}
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="text-center font-bold text-gray-700 mb-2"> Flow Q vs Pressure (Linear)</h3>
-          <ResponsiveContainer width="30%" height={250}>
+          <ResponsiveContainer width="100%" height={250}>
             <LineChart data={pressureData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="x" label={{ value: 'ΔP', position: 'insideBottom', offset: -10 }} />

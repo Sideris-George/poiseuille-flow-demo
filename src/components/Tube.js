@@ -62,7 +62,7 @@ const Tube = ({ radius, length, viscosity, flow, showRBCs, showWBCs }) => {
   const totalLength = 2 * outerSegmentLength + 3 * innerSegmentLength;
 
   const rbcSpeed = flow  * 0.1 * 5e1;  // scale to reasonable speed visually
-  const wbcSpeed = rbcSpeed * 0.2;
+  const wbcSpeed = rbcSpeed * 1;
 
   // Compute boundaries along x
   const positions = [

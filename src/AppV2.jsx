@@ -4,7 +4,7 @@ import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import './AppV2.css';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot } from 'recharts';
-import { BASE, MURAL, PERICYTE_MAX_DIAMETER, basePhys, constrictedLengthMm, compute, etaApparent, segRadius, mural, muralType, clampTone, switchMode, isSimple, inMode, fmtFlow, fmtRatio, sig, SLIDERS, TOGGLES } from './physics';
+import { BASE, MURAL, PERICYTE_MAX_DIAMETER, vesselRadius, basePhys, constrictedLengthMm, compute, etaApparent, segRadius, mural, muralType, clampTone, switchMode, isSimple, inMode, fmtFlow, fmtRatio, sig, SLIDERS, TOGGLES } from './physics';
 
 const range = (a, b, n, log) => Array.from({ length: n }, (_, i) => (log ? a * Math.pow(b / a, i / (n - 1)) : a + ((b - a) * i) / (n - 1)));
 
@@ -56,7 +56,7 @@ export default function AppV2() {
   const here = phys.Q_ulmin * unitScale;
 
   const radiusData = useMemo(() => (simple
-    ? range(1, 10, 50).map(r0 => ({ 'r (µm)': r0, Q: qOf({ r0 }) }))
+    ? range(3, 10, 50).map(rs => ({ 'r (µm)': rs, Q: qOf({ rs }) }))
     : range(cell.toneMin, cell.toneMax, 50).map(tone => ({ 'radius under the cell (µm)': state.r0 * tone, Q: qOf({ tone }) }))), [state, unitScale, cell, simple]);
   const viscData = useMemo(() => (simple
     ? range(1, 10, 40).map(eta => ({ 'η (cP)': eta, Q: qOf({ eta }) }))
@@ -68,6 +68,7 @@ export default function AppV2() {
 
   const transit = phys.transit_ms >= 1000 ? [sig(phys.transit_ms / 1000), 's'] : [sig(phys.transit_ms), 'ms'];
   const readouts = simple ? [
+    ['Vessel either side', sig(vesselRadius(state)), 'µm'],
     ['Resistance ΔP/Q', sig(phys.R_mmHg_per_ulmin), 'mmHg per µL/min'],
     ['Mean velocity', sig(phys.vmean_mms), 'mm/s'],
     ['Centreline velocity', sig(phys.vmax_mms), 'mm/s'],
@@ -110,7 +111,7 @@ export default function AppV2() {
         </div>
         <p className="eq-live">
           {simple ? (
-            <>= π · (<b className="c-r">{state.r0} µm</b>)⁴ · <b className="c-P">{state.dP} mmHg</b> ÷ (8 · <b className="c-eta">{state.eta.toFixed(2)} cP</b> · <b className="c-L">{state.L} mm</b>)</>
+            <>= π · (<b className="c-r">{state.rs.toFixed(1)} µm</b>)⁴ · <b className="c-P">{state.dP} mmHg</b> ÷ (8 · <b className="c-eta">{state.eta.toFixed(2)} cP</b> · <b className="c-L">{state.L} mm</b>)</>
           ) : (
             <>Q = ΔP ÷ (R<sub>vessel</sub> + R<sub>constriction</sub>), each R = 8ηL ÷ πr⁴ — vessel at <b className="c-r">{state.r0} µm</b>, constriction at <b className="c-r">{sig(rSeg)} µm</b> over <b className="c-L">{constrictedLengthMm(state) < 1 ? sig(constrictedLengthMm(state) * 1000) + ' µm' : state.L + ' mm'}</b>, <b className="c-P">{state.dP} mmHg</b>
             &nbsp;— viscosity from <span className="c-eta">{state.hct}% haematocrit</span> in <span className="c-eta">{state.plasma.toFixed(2)} cP plasma</span>{state.fl ? `, corrected for a ${sig(2 * rSeg)} µm lumen` : ''}</>
@@ -123,7 +124,7 @@ export default function AppV2() {
           <h3>{simple ? 'The four variables' : 'Vessel, mural cell and blood'}</h3>
           {SLIDERS.filter(c => inMode(c, mode) && (!c.showIf || state[c.showIf])).map(c => (
             <div className="ctl" key={c.key}>
-              <label><span className={c.cls}>{c.dynamic ? `${cell.label} tone (segment ÷ vessel radius)` : (!simple && c.advLabel) || c.label}</span><span className="v">{c.fmt ? c.fmt(state[c.key]) : state[c.key]} {c.unit}</span></label>
+              <label><span className={c.cls}>{c.dynamic ? `${cell.label} tone (segment ÷ vessel radius)` : c.label}</span><span className="v">{c.fmt ? c.fmt(state[c.key]) : state[c.key]} {c.unit}</span></label>
               <input type="range" min={c.dynamic ? cell.toneMin : c.min} max={c.dynamic ? cell.toneMax : c.max} step={c.step} value={state[c.key]} onChange={e => set(c.key, Number(e.target.value))} style={{ accentColor: `var(--${c.cls})` }} />
             </div>
           ))}

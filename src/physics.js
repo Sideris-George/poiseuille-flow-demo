@@ -6,9 +6,10 @@
 //            of the vessel in series with the rest, pulsatile pressure, extra readouts.
 export const BASE = {
   mode: 'simple',
-  r0: 5,       // radius of the vessel either side of the mural cell (µm); slider range 1–10
+  r0: 4,       // radius of the vessel either side of the mural cell (µm); advanced slider 3–10, fixed reference in simple
+  rs: 4,       // simple only: radius under the cell (µm), the r in the equation
   tone: 1.0,   // advanced only: radius under the cell as a fraction of r0 (0.6 = constriction, 1.1 = maximal dilation)
-  eta: 1.52,   // simple only: blood viscosity set directly (cP). 1.52 is what advanced gives at reset.
+  eta: 1.52,   // simple only: blood viscosity set directly (cP). 1.52 is what advanced gives at reset (8 µm lumen, 45%).
   L: 5, dP: 30, hct: 45, plasma: 1.2,
   fl: true, pulse: false, hr: 72, profile: true,
   rbc: true, wbc: true, plt: true, speed: 1,
@@ -19,14 +20,20 @@ export const isSimple = s => s.mode === 'simple';
 // smooth muscle cells cover arterioles above that. Their contractile ranges differ:
 // toneMin/toneMax set the contractile range of each cell (the tone slider reads these, not SLIDERS).
 export const PERICYTE_MAX_DIAMETER = 12;
+export const MAX_DILATION = 1.1;
 export const MURAL = {
   pericyte: { label: 'Pericyte', toneMin: 0.6, toneMax: 1.1, color: '#2fa37a' },
   smc: { label: 'Smooth muscle', toneMin: 0.6, toneMax: 1.1, color: '#c7692a' },
 };
-export const muralType = s => (2 * s.r0 <= PERICYTE_MAX_DIAMETER ? 'pericyte' : 'smc');
+// Radius of the vessel either side of the cell. In simple mode the segment can dilate at most
+// 10% beyond its surroundings, so the surrounding vessel widens with the slider once it passes that.
+export const SIMPLE_VESSEL_RADIUS = 9;   // simple mode: the tube either side of the pericyte (µm)
+export const vesselRadius = s => (isSimple(s) ? Math.max(SIMPLE_VESSEL_RADIUS, s.rs / MAX_DILATION) : s.r0);
+// Simple mode always shows a pericyte (it is a cartoon of a constriction); advanced follows diameter.
+export const muralType = s => (isSimple(s) ? 'pericyte' : 2 * s.r0 <= PERICYTE_MAX_DIAMETER ? 'pericyte' : 'smc');
 export const mural = s => MURAL[muralType(s)];
 export const clampTone = s => ({ ...s, tone: Math.min(mural(s).toneMax, Math.max(mural(s).toneMin, s.tone)) });
-export const segRadius = s => (isSimple(s) ? s.r0 : s.r0 * s.tone);
+export const segRadius = s => (isSimple(s) ? s.rs : s.r0 * s.tone);
 
 // How much of the vessel the mural cell actually squeezes. A pericyte only pinches the
 // stretch under its soma and processes (~20 µm); smooth muscle covers the arteriole
@@ -45,11 +52,11 @@ export function etaApparent(D, H, plasma, useFL) {
 }
 
 export function compute(s) {
-  const rum = segRadius(s), r0 = s.r0 * 1e-6, r = rum * 1e-6;
+  const rum = segRadius(s), r0 = vesselRadius(s) * 1e-6, r = rum * 1e-6;
   const L = s.L * 1e-3, Lc = constrictedLengthMm(s) * 1e-3, Lu = L - Lc, dP = s.dP * 133.322;
   const simple = isSimple(s);
   const etaCP = simple ? s.eta : etaApparent(2 * rum, s.hct / 100, s.plasma, s.fl);    // in the constricted stretch
-  const eta0CP = simple ? s.eta : etaApparent(2 * s.r0, s.hct / 100, s.plasma, s.fl);  // in the uncovered vessel
+  const eta0CP = simple ? s.eta : etaApparent(2 * vesselRadius(s), s.hct / 100, s.plasma, s.fl);  // in the uncovered vessel
   const eta = etaCP * 1e-3, eta0 = eta0CP * 1e-3;
   const Rc = 8 * eta * Lc / (Math.PI * Math.pow(r, 4));                     // Pa·s/m³
   const Ru = 8 * eta0 * Lu / (Math.PI * Math.pow(r0, 4));
@@ -85,8 +92,10 @@ export function hctForEta(eta, D, plasma, useFL) {
 // Convert state between the two models, carrying the visible numbers across.
 export function switchMode(s, mode) {
   if (mode === s.mode) return s;
-  if (mode === 'simple') return { ...s, mode, tone: 1, eta: Number(compute(s).etaCP.toFixed(2)), pulse: false };
-  return clampTone({ ...s, mode, hct: hctForEta(s.eta, 2 * s.r0, s.plasma, s.fl) });
+  if (mode === 'simple') return { ...s, mode, rs: Math.round(segRadius(s) * 2) / 2, tone: 1, eta: Number(compute(s).etaCP.toFixed(2)), pulse: false };
+  // advanced takes the simple radius as the vessel radius at resting tone, so flow matches
+  return clampTone({ ...s, mode, r0: Math.round(s.rs * 2) / 2, tone: 1, hct: hctForEta(s.eta, 2 * s.rs, s.plasma, s.fl) });
+  // note: r0 becomes the simple radius itself, so the vessel is uniform at resting tone
 }
 
 export function pulseWave(phase) {
@@ -105,7 +114,8 @@ export const fmtRatio = x => (x >= 1 ? `×${sig(x)}` : `×${sig(x, 2)} (1/${sig(
 
 // `modes` lists where a control appears; omitted = both.
 export const SLIDERS = [
-  { key: 'r0', label: 'Radius r', unit: 'µm', min: 3, max: 10, step: 1, cls: 'c-r', advLabel: 'Vessel radius' },
+  { key: 'rs', label: 'Radius r (under the cell)', unit: 'µm', min: 3, max: 10, step: 0.5, cls: 'c-r', fmt: v => v.toFixed(1), modes: ['simple'] },
+  { key: 'r0', label: 'Vessel radius', unit: 'µm', min: 3, max: 10, step: 0.5, cls: 'c-r', fmt: v => v.toFixed(1), modes: ['advanced'] },
   { key: 'tone', label: 'Mural cell tone (segment ÷ vessel radius)', unit: '×', min: 0.6, max: 1.1, step: 0.01, cls: 'c-r', fmt: v => v.toFixed(2), dynamic: true, modes: ['advanced'] },
   { key: 'eta', label: 'Viscosity η', unit: 'cP', min: 1, max: 10, step: 0.05, cls: 'c-eta', fmt: v => v.toFixed(2), modes: ['simple'] },
   { key: 'L', label: 'Length L', unit: 'mm', min: 0.5, max: 10, step: 0.5, cls: 'c-L', fmt: v => v.toFixed(1) },
@@ -125,4 +135,3 @@ export const TOGGLES = [
   { key: 'plt', label: 'Platelets' },
 ];
 export const inMode = (c, mode) => !c.modes || c.modes.includes(mode);
-

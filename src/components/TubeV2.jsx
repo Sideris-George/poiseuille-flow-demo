@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { pulseWave, segRadius, muralType, MURAL } from '../physics';
+import { pulseWave, segRadius, vesselRadius, muralType, MURAL } from '../physics';
 
 const K_VIS = 1.2, V_CAP = 520;
 // Radii (vessel, cells, mural cell) are drawn at DISPLAY_SCALE × their size in µm so a capillary reads clearly.
@@ -24,7 +24,7 @@ const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 // under its body; smooth muscle sets the radius of the whole segment.
 export function buildSegments(state) {
   const S = DISPLAY_SCALE;
-  const r0 = state.r0 * S, r = segRadius(state) * S, type = muralType(state);
+  const r0 = vesselRadius(state) * S, r = segRadius(state) * S, type = muralType(state);
   const Lin = 120, Lt = clamp(50 * state.L, 80, 500), totalLen = Lin + Lt + Lin;
   const somaR = Math.max(5, Math.min(11, r0 * 0.4));
   const procLen = somaR * 4.5;               // how far the pericyte's processes reach along the vessel
@@ -221,6 +221,7 @@ function Cells({ state, phys, segs }) {
 
 // Re-frame the camera only when the vessel changes size; otherwise leave the user's zoom alone.
 function Framer({ totalLen, r0 }) {
+  // r0 here is the drawn vessel radius in µm
   const { camera, controls } = useThree();
   const active = useRef(true);
   useEffect(() => { active.current = true; }, [totalLen, r0]);
@@ -236,7 +237,7 @@ function Framer({ totalLen, r0 }) {
 }
 
 export default function TubeV2({ state, phys }) {
-  const { segs, totalLen, somaR, procLen, type } = useMemo(() => buildSegments(state), [state.r0, state.tone, state.L, state.mode]);
+  const { segs, totalLen, somaR, procLen, type } = useMemo(() => buildSegments(state), [state.r0, state.rs, state.tone, state.L, state.mode]);
   return (
     <Canvas camera={{ position: [60, 150, 330], fov: 42, near: 1, far: 5000 }} style={{ height: 460, width: '100%', background: '#101319' }}>
       <fog attach="fog" args={['#101319', 900, 2200]} />
@@ -246,7 +247,7 @@ export default function TubeV2({ state, phys }) {
       {segs.map((s, i) => <Segment key={i} seg={s} />)}
       {type === 'pericyte' ? <Pericyte seg={segs[1]} somaR={somaR} procLen={procLen} /> : <SmoothMuscle seg={segs[1]} />}
       <Cells state={state} phys={phys} segs={segs} />
-      <Framer totalLen={totalLen} r0={state.r0} />
+      <Framer totalLen={totalLen} r0={vesselRadius(state)} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
     </Canvas>
   );

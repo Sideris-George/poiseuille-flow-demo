@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { pulseWave, segRadius, muralType, MURAL } from '../physics';
 
 const K_VIS = 1.2, V_CAP = 520;
+// Radii (vessel, cells, mural cell) are drawn at DISPLAY_SCALE × their size in µm so a capillary reads clearly.
+const DISPLAY_SCALE = 2.5;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -21,13 +23,15 @@ const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 // radii in µm; lengths are compressed to fit on screen. A pericyte pinches only the stretch
 // under its body; smooth muscle sets the radius of the whole segment.
 export function buildSegments(state) {
-  const r0 = state.r0, r = segRadius(state), type = muralType(state);
-  const Lin = 150, Lt = clamp(50 * state.L, 80, 500), totalLen = Lin + Lt + Lin;
-  const somaR = Math.max(2.5, Math.min(5, r0 * 0.35));
+  const S = DISPLAY_SCALE;
+  const r0 = state.r0 * S, r = segRadius(state) * S, type = muralType(state);
+  const Lin = 120, Lt = clamp(50 * state.L, 80, 500), totalLen = Lin + Lt + Lin;
+  const somaR = Math.max(5, Math.min(11, r0 * 0.4));
+  const procLen = somaR * 4.5;               // how far the pericyte's processes reach along the vessel
   const c = Lt / 2;
   // half-width of the fully constricted zone and width of its shoulders
-  const hw = type === 'pericyte' ? Math.max(10, somaR * 2.6) : Lt / 2 - 28;
-  const shoulder = type === 'pericyte' ? Math.max(8, somaR * 2) : 26;
+  const hw = type === 'pericyte' ? procLen * 0.8 : Lt / 2 - 28;
+  const shoulder = type === 'pericyte' ? procLen * 0.5 : 26;
   const window = s => smooth(1 - (Math.abs(s - c) - hw) / shoulder);
   const rMid = s => r0 + (r - r0) * window(s);
   let x = -totalLen / 2;
@@ -36,7 +40,7 @@ export function buildSegments(state) {
   const s1 = makeSeg(new THREE.Vector3(x, 0, 0), X, Lt, rMid); x += Lt;
   const s2 = makeSeg(new THREE.Vector3(x, 0, 0), X, Lin, () => r0);
   s0.next = [{ i: 1, w: 1 }]; s1.next = [{ i: 2, w: 1 }]; s2.next = [{ i: 0, w: 1 }];
-  return { segs: [s0, s1, s2], totalLen, somaR, type, hw, shoulder };
+  return { segs: [s0, s1, s2], totalLen, somaR, procLen, type };
 }
 
 function Segment({ seg }) {
@@ -82,23 +86,33 @@ function SmoothMuscle({ seg }) {
   );
 }
 
-// Pericyte: a soma on the outside of the waist it creates, with two processes wrapping the vessel.
-function Pericyte({ seg, somaR }) {
+// Pericyte: a soma on the outside of the waist it creates, with processes running along the
+// vessel and circumferential processes wrapping it at intervals.
+function Pericyte({ seg, somaR, procLen }) {
   const sMid = seg.len / 2, xm = seg.p0.x + sMid;
-  const proc = Math.max(0.5, somaR * 0.22);
-  const c = MURAL.pericyte.color;
+  const proc = Math.max(0.9, somaR * 0.2);
+  const c = MURAL.pericyte.color, c2 = '#3bbf8f';
+  const matProps = { roughness: 0.5, emissive: '#0e3b2c', emissiveIntensity: 0.3 };
+  const rings = [-1, -0.55, 0.55, 1].map(f => f * procLen);
+  const lon = [[0, 1], [0.7, 0.7], [-0.7, 0.7]]; // [angle offsets] around the top of the vessel
   return (
     <group position={[xm, 0, 0]}>
-      <mesh position={[0, seg.rAt(sMid) + somaR * 0.7, 0]} scale={[1.6, 0.8, 1.1]}>
+      <mesh position={[0, seg.rAt(sMid) + somaR * 0.65, 0]} scale={[1.7, 0.8, 1.2]}>
         <sphereGeometry args={[somaR, 20, 16]} />
-        <meshStandardMaterial color={c} roughness={0.5} emissive="#0e3b2c" emissiveIntensity={0.35} />
+        <meshStandardMaterial color={c} {...matProps} />
       </mesh>
-      {[-1, 1].map(side => {
-        const dx = side * somaR * 1.9;
+      {rings.map((dx, i) => (
+        <mesh key={'r' + i} position={[dx, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[seg.rAt(sMid + dx) + proc * 0.6, proc, 10, 48, Math.PI * 1.4]} />
+          <meshStandardMaterial color={c2} {...matProps} />
+        </mesh>
+      ))}
+      {lon.map(([a, k], i) => {
+        const R = seg.rAt(sMid) + proc * 0.6;
         return (
-          <mesh key={side} position={[dx, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <torusGeometry args={[seg.rAt(sMid + dx) + proc * 0.6, proc, 10, 48, Math.PI * 1.25]} />
-            <meshStandardMaterial color="#3bbf8f" roughness={0.5} emissive="#0e3b2c" emissiveIntensity={0.25} />
+          <mesh key={'l' + i} position={[0, R * Math.cos(a * 0.9), R * Math.sin(a * 0.9)]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[proc * 0.8 * k, proc * 0.8 * k, procLen * 2, 8]} />
+            <meshStandardMaterial color={c2} {...matProps} />
           </mesh>
         );
       })}
@@ -124,7 +138,7 @@ function Cells({ state, phys, segs }) {
 
   // Particles are rebuilt only when geometry or counts change.
   const particles = useMemo(() => {
-    const vols = segs.map(s => Math.PI * ((s.rAt(0) + s.rAt(s.len / 2)) / 2) ** 2 * s.len);
+    const vols = segs.map(s => Math.PI * ((s.rAt(0) + s.rAt(s.len / 2)) / 2 / DISPLAY_SCALE) ** 2 * s.len); // volumes in µm²·display-length, as before
     const vol = vols.reduce((a, b) => a + b, 0);
     const nR = state.rbc ? clamp(Math.round(1.05e-4 * (state.hct / 100) * vol), 30, 900) : 0;
     const nW = state.wbc ? clamp(Math.round(nR / 40) + 2, 2, 60) : 0;
@@ -149,13 +163,13 @@ function Cells({ state, phys, segs }) {
     const dt = Math.min(0.05, delta); clockRef.current += dt; const t = clockRef.current;
     const pf = state.pulse ? 1 + 0.55 * pulseWave(t * state.hr / 60) : 1;
     const Qum = phys.Q * 1e18 * pf;
-    const rTest = segRadius(state);
-    const scR = Math.min(1, 0.85 * rTest / 3.9), scW = Math.min(1, 0.8 * rTest / 6);
+    const S = DISPLAY_SCALE, rTestUm = segRadius(state), rTest = rTestUm * S;
+    const scR = Math.min(1, 0.85 * rTestUm / 3.9) * S, scW = Math.min(1, 0.8 * rTestUm / 6) * S;
     let iR = 0, iW = 0, iP = 0;
     for (const pt of particles.list) {
       const seg = segs[pt.seg];
       const rP = seg.rAt(pt.s);
-      const vmm = Qum * seg.q / (Math.PI * rP * rP) / 1000;
+      const vmm = Qum * seg.q / (Math.PI * (rP / S) * (rP / S)) / 1000;
       const vis = Math.min(V_CAP, vmm * K_VIS * state.speed);
       const prof = state.fl && rTest < 12 ? 1.3 : 2 * (1 - pt.rho * pt.rho) + 0.08;
       pt.s += vis * prof * dt;
@@ -164,13 +178,13 @@ function Cells({ state, phys, segs }) {
         for (const n of seg.next) { u -= n.w; if (u <= 0) { ni = n.i; break; } }
         pt.seg = ni; if (pt.s > segs[ni].len) pt.s = Math.random() * segs[ni].len;
       }
-      const cellR = pt.kind === 0 ? 3.9 * scR : pt.kind === 1 ? 6 * scW : 1.3;
+      const cellR = pt.kind === 0 ? 3.9 * scR : pt.kind === 1 ? 6 * scW : 1.3 * S;
       const rad = Math.max(0, rP - cellR * 1.05) * pt.rho;
       p.copy(seg.p0).addScaledVector(seg.dir, pt.s).addScaledVector(seg.n1, rad * Math.cos(pt.theta)).addScaledVector(seg.n2, rad * Math.sin(pt.theta));
       dummy.position.copy(p);
       if (pt.kind === 0) { dummy.rotation.set(pt.ph + t * pt.spin * 0.4, pt.ph2, t * pt.spin * 0.7); dummy.scale.setScalar(scR); dummy.updateMatrix(); rbcRef.current.setMatrixAt(iR++, dummy.matrix); }
       else if (pt.kind === 1) { dummy.rotation.set(t * pt.spin * 0.3, pt.ph, t * pt.spin * 0.2); dummy.scale.setScalar(scW * (1 + 0.06 * Math.sin(t * 2 + pt.ph))); dummy.updateMatrix(); wbcRef.current.setMatrixAt(iW++, dummy.matrix); }
-      else { dummy.rotation.set(pt.ph, t * pt.spin, pt.ph2); dummy.scale.setScalar(1); dummy.updateMatrix(); pltRef.current.setMatrixAt(iP++, dummy.matrix); }
+      else { dummy.rotation.set(pt.ph, t * pt.spin, pt.ph2); dummy.scale.setScalar(S); dummy.updateMatrix(); pltRef.current.setMatrixAt(iP++, dummy.matrix); }
     }
     rbcRef.current.instanceMatrix.needsUpdate = true;
     wbcRef.current.instanceMatrix.needsUpdate = true;
@@ -178,7 +192,7 @@ function Cells({ state, phys, segs }) {
 
     if (state.profile) {
       const seg = segs[1];
-      const vis = Math.min(V_CAP, (Qum / (Math.PI * rTest * rTest) / 1000) * K_VIS * state.speed);
+      const vis = Math.min(V_CAP, (Qum / (Math.PI * rTestUm * rTestUm) / 1000) * K_VIS * state.speed);
       const maxLen = Math.min(seg.len * 0.8, vis * 0.7 + 6);
       const xm = seg.p0.x + seg.len / 2 - maxLen / 2;
       arrows.forEach((a, i) => { const rho = -0.9 + i * 0.225; const len = Math.max(2, maxLen * (1 - rho * rho)); a.position.set(xm, rho * rTest, 0); a.setLength(len, Math.min(6, len * 0.5), 3); });
@@ -213,7 +227,7 @@ function Framer({ totalLen, r0 }) {
   useFrame(() => {
     if (!active.current) return;
     const target = controls ? controls.target : new THREE.Vector3();
-    const want = Math.max(totalLen * 0.85, r0 * 7, 260);
+    const want = Math.max(totalLen * 0.62, r0 * DISPLAY_SCALE * 6, 200);
     const cur = camera.position.distanceTo(target);
     if (Math.abs(cur - want) > 1) camera.position.sub(target).setLength(lerp(cur, want, 0.06)).add(target);
     else active.current = false;
@@ -222,15 +236,15 @@ function Framer({ totalLen, r0 }) {
 }
 
 export default function TubeV2({ state, phys }) {
-  const { segs, totalLen, somaR, type } = useMemo(() => buildSegments(state), [state.r0, state.tone, state.L, state.mode]);
+  const { segs, totalLen, somaR, procLen, type } = useMemo(() => buildSegments(state), [state.r0, state.tone, state.L, state.mode]);
   return (
-    <Canvas camera={{ position: [140, 260, 520], fov: 45, near: 1, far: 5000 }} style={{ height: 460, width: '100%', background: '#101319' }}>
+    <Canvas camera={{ position: [60, 150, 330], fov: 42, near: 1, far: 5000 }} style={{ height: 460, width: '100%', background: '#101319' }}>
       <fog attach="fog" args={['#101319', 900, 2200]} />
       <hemisphereLight args={['#fff2e6', '#2a1a22', 0.9]} />
       <directionalLight position={[200, 300, 250]} intensity={0.8} />
       <directionalLight position={[-250, -100, -200]} intensity={0.35} color="#ffb0b8" />
       {segs.map((s, i) => <Segment key={i} seg={s} />)}
-      {type === 'pericyte' ? <Pericyte seg={segs[1]} somaR={somaR} /> : <SmoothMuscle seg={segs[1]} />}
+      {type === 'pericyte' ? <Pericyte seg={segs[1]} somaR={somaR} procLen={procLen} /> : <SmoothMuscle seg={segs[1]} />}
       <Cells state={state} phys={phys} segs={segs} />
       <Framer totalLen={totalLen} r0={state.r0} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.08} />

@@ -164,27 +164,42 @@ function Cells({ state, phys, segs }) {
     const pf = state.pulse ? 1 + 0.55 * pulseWave(t * state.hr / 60) : 1;
     const Qum = phys.Q * 1e18 * pf;
     const S = DISPLAY_SCALE, rTestUm = segRadius(state), rTest = rTestUm * S;
-    const scR = Math.min(1, 0.85 * rTestUm / 3.9) * S, scW = Math.min(1, 0.8 * rTestUm / 6) * S;
+    const RBC_R = 3.9, WBC_R = 6, PLT_R = 1.3; // real cell radii in µm; cells never change volume
     let iR = 0, iW = 0, iP = 0;
     for (const pt of particles.list) {
       const seg = segs[pt.seg];
-      const rP = seg.rAt(pt.s);
-      const vmm = Qum * seg.q / (Math.PI * (rP / S) * (rP / S)) / 1000;
+      const rP = seg.rAt(pt.s), rPum = rP / S;
+      const vmm = Qum * seg.q / (Math.PI * rPum * rPum) / 1000;
       const vis = Math.min(V_CAP, vmm * K_VIS * state.speed);
-      const prof = state.fl && rTest < 12 ? 1.3 : 2 * (1 - pt.rho * pt.rho) + 0.08;
+      const prof = state.fl && rTestUm < 12 ? 1.3 : 2 * (1 - pt.rho * pt.rho) + 0.08;
       pt.s += vis * prof * dt;
       if (pt.s > seg.len) {
         pt.s -= seg.len; let u = Math.random(); let ni = seg.next[0].i;
         for (const n of seg.next) { u -= n.w; if (u <= 0) { ni = n.i; break; } }
         pt.seg = ni; if (pt.s > segs[ni].len) pt.s = Math.random() * segs[ni].len;
       }
-      const cellR = pt.kind === 0 ? 3.9 * scR : pt.kind === 1 ? 6 * scW : 1.3 * S;
-      const rad = Math.max(0, rP - cellR * 1.05) * pt.rho;
+      // Deformation: f < 1 means the lumen is narrower than the cell. The cell squashes
+      // radially by f and stretches along the flow to keep its volume (capped), parachute-style.
+      const cellRum = pt.kind === 0 ? RBC_R : pt.kind === 1 ? WBC_R : PLT_R;
+      const f = Math.min(1, (0.92 * rPum) / cellRum);
+      const axial = Math.min(2.6, 1 / (f * f));
+      const cellR = cellRum * f * S;                 // radial extent on screen after deformation
+      const rad = Math.max(0, rP - cellR * 1.02) * pt.rho;
       p.copy(seg.p0).addScaledVector(seg.dir, pt.s).addScaledVector(seg.n1, rad * Math.cos(pt.theta)).addScaledVector(seg.n2, rad * Math.sin(pt.theta));
       dummy.position.copy(p);
-      if (pt.kind === 0) { dummy.rotation.set(pt.ph + t * pt.spin * 0.4, pt.ph2, t * pt.spin * 0.7); dummy.scale.setScalar(scR); dummy.updateMatrix(); rbcRef.current.setMatrixAt(iR++, dummy.matrix); }
-      else if (pt.kind === 1) { dummy.rotation.set(t * pt.spin * 0.3, pt.ph, t * pt.spin * 0.2); dummy.scale.setScalar(scW * (1 + 0.06 * Math.sin(t * 2 + pt.ph))); dummy.updateMatrix(); wbcRef.current.setMatrixAt(iW++, dummy.matrix); }
-      else { dummy.rotation.set(pt.ph, t * pt.spin, pt.ph2); dummy.scale.setScalar(S); dummy.updateMatrix(); pltRef.current.setMatrixAt(iP++, dummy.matrix); }
+      if (pt.kind === 0) {
+        if (f < 0.98) { dummy.rotation.set(0.15 * Math.sin(t * 3 + pt.ph), 0, Math.PI / 2); dummy.scale.set(S * f, S * axial, S * f); }
+        else { dummy.rotation.set(pt.ph + t * pt.spin * 0.4, pt.ph2, t * pt.spin * 0.7); dummy.scale.setScalar(S); }
+        dummy.updateMatrix(); rbcRef.current.setMatrixAt(iR++, dummy.matrix);
+      } else if (pt.kind === 1) {
+        const wob = 1 + 0.06 * Math.sin(t * 2 + pt.ph);
+        if (f < 0.98) { dummy.rotation.set(0, 0, 0); dummy.scale.set(S * axial * wob, S * f, S * f); }
+        else { dummy.rotation.set(t * pt.spin * 0.3, pt.ph, t * pt.spin * 0.2); dummy.scale.setScalar(S * wob); }
+        dummy.updateMatrix(); wbcRef.current.setMatrixAt(iW++, dummy.matrix);
+      } else {
+        dummy.rotation.set(pt.ph, t * pt.spin, pt.ph2); dummy.scale.setScalar(S);
+        dummy.updateMatrix(); pltRef.current.setMatrixAt(iP++, dummy.matrix);
+      }
     }
     rbcRef.current.instanceMatrix.needsUpdate = true;
     wbcRef.current.instanceMatrix.needsUpdate = true;
